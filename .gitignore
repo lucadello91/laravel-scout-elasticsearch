@@ -12,6 +12,7 @@ Thumbs.db
 
 # User-specific stuff:
 .idea/**/workspace.xml
+.idea/
 .idea/**/tasks.xml
 .idea/dictionaries
 

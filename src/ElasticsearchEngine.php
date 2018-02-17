@@ -2,21 +2,21 @@
 
 namespace ScoutEngines\Elasticsearch;
 
-use Laravel\Scout\Builder;
-use Laravel\Scout\Engines\Engine;
 use Elasticsearch\Client as Elastic;
 use Illuminate\Database\Eloquent\Collection;
-use Illuminate\Support\Collection as BaseCollection;
+use Laravel\Scout\Builder;
+use Laravel\Scout\Engines\Engine;
 
 class ElasticsearchEngine extends Engine
 {
+
     /**
      * Index where the models will be saved.
      *
      * @var string
      */
     protected $index;
-    
+
     /**
      * Elastic where the instance of Elastic|\Elasticsearch\Client is stored.
      *
@@ -27,52 +27,27 @@ class ElasticsearchEngine extends Engine
     /**
      * Create a new engine instance.
      *
-     * @param  \Elasticsearch\Client  $elastic
-     * @return void
+     * @param  \Elasticsearch\Client $elastic
+     *
+     * @param $index
      */
     public function __construct(Elastic $elastic, $index)
     {
         $this->elastic = $elastic;
-        $this->index = $index;
-    }
+        $this->index   = $index;
 
-    /**
-     * Update the given model in the index.
-     *
-     * @param  Collection  $models
-     * @return void
-     */
-    public function update($models)
-    {
-        if ($models->isEmpty()) {
-            return;
+        $indexParams['index'] = $this->index;
+        if (!$this->elastic->indices()->exists($indexParams)) {
+            $response = $this->elastic->indices()->create($indexParams);
         }
 
-        $params['body'] = [];
-        $params['type'] = $models->first()->searchableAs();
-
-        $models->each(function($model) use (&$params)
-        {
-            $params['body'][] = [
-                'update' => [
-                    '_id' => $model->getKey(),
-                    '_index' => $this->index,
-//                    '_type' => $model->searchableAs(),
-                ]
-            ];
-            $params['body'][] = [
-                'doc' => $model->toSearchableArray(),
-                'doc_as_upsert' => true
-            ];
-        });
-
-        $this->elastic->bulk($params);
     }
 
     /**
      * Remove the given model from the index.
      *
-     * @param  Collection  $models
+     * @param  Collection $models
+     *
      * @return void
      */
     public function delete($models)
@@ -84,14 +59,13 @@ class ElasticsearchEngine extends Engine
         $params['body'] = [];
         $params['type'] = $models->first()->searchableAs();
 
-        $models->each(function($model) use (&$params)
-        {
+        $models->each(function($model) use (&$params) {
             $params['body'][] = [
                 'delete' => [
-                    '_id' => $model->getKey(),
+                    '_id'    => $model->getKey(),
                     '_index' => $this->index,
-//                    '_type' => $model->searchableAs(),
-                ]
+                    //                    '_type' => $model->searchableAs(),
+                ],
             ];
         });
 
@@ -99,36 +73,73 @@ class ElasticsearchEngine extends Engine
     }
 
     /**
-     * Perform the given search on the engine.
+     * Get the total count from a raw result returned by the engine.
      *
-     * @param  Builder  $builder
-     * @return mixed
+     * @param  mixed $results
+     *
+     * @return int
      */
-    public function search(Builder $builder)
+    public function getTotalCount($results)
     {
-        return $this->performSearch($builder, array_filter([
-            'numericFilters' => $this->filters($builder),
-            'size' => $builder->limit,
-        ]));
+        return $results['hits']['total'];
+    }
+
+    /**
+     * Map the given results to instances of the given model.
+     *
+     * @param  mixed $results
+     * @param  \Illuminate\Database\Eloquent\Model $model
+     *
+     * @return Collection
+     */
+    public function map($results, $model)
+    {
+        if ($results['hits']['total'] === 0) {
+            return Collection::make();
+        }
+
+        $keys = collect($results['hits']['hits'])
+            ->pluck('_id')->values()->all();
+
+        $models = $model->whereIn(
+            $model->getKeyName(), $keys
+        )->get()->keyBy($model->getKeyName());
+
+        return collect($results['hits']['hits'])->map(function($hit) use ($model, $models) {
+            return isset($models[$hit['_id']]) ? $models[$hit['_id']] : NULL;
+        })->filter()->values();
+    }
+
+    /**
+     * Pluck and return the primary keys of the given results.
+     *
+     * @param  mixed $results
+     *
+     * @return \Illuminate\Support\Collection
+     */
+    public function mapIds($results)
+    {
+        return collect($results['hits']['hits'])->pluck('_id')->values();
     }
 
     /**
      * Perform the given search on the engine.
      *
-     * @param  Builder  $builder
-     * @param  int  $perPage
-     * @param  int  $page
+     * @param  Builder $builder
+     * @param  int $perPage
+     * @param  int $page
+     *
      * @return mixed
      */
     public function paginate(Builder $builder, $perPage, $page)
     {
         $result = $this->performSearch($builder, [
             'numericFilters' => $this->filters($builder),
-            'from' => (($page * $perPage) - $perPage),
-            'size' => $perPage,
+            'from'           => (($page * $perPage) - $perPage),
+            'size'           => $perPage,
         ]);
 
-       $result['nbPages'] = $result['hits']['total']/$perPage;
+        $result['nbPages'] = $result['hits']['total'] / $perPage;
 
         return $result;
     }
@@ -136,22 +147,23 @@ class ElasticsearchEngine extends Engine
     /**
      * Perform the given search on the engine.
      *
-     * @param  Builder  $builder
-     * @param  array  $options
+     * @param  Builder $builder
+     * @param  array $options
+     *
      * @return mixed
      */
     protected function performSearch(Builder $builder, array $options = [])
     {
         $params = [
             'index' => $this->index,
-            'type' => $builder->index ?: $builder->model->searchableAs(),
-            'body' => [
+            'type'  => $builder->index ? : $builder->model->searchableAs(),
+            'body'  => [
                 'query' => [
                     'bool' => [
-                        'must' => [['query_string' => [ 'query' => "*{$builder->query}*"]]]
-                    ]
-                ]
-            ]
+                        'must' => [['query_string' => ['query' => "*{$builder->query}*"]]],
+                    ],
+                ],
+            ],
         ];
 
         if ($sort = $this->sort($builder)) {
@@ -184,14 +196,33 @@ class ElasticsearchEngine extends Engine
     }
 
     /**
+     * Generates the sort if theres any.
+     *
+     * @param  Builder $builder
+     *
+     * @return array|null
+     */
+    protected function sort($builder)
+    {
+        if (count($builder->orders) == 0) {
+            return NULL;
+        }
+
+        return collect($builder->orders)->map(function($order) {
+            return [$order['column'] => $order['direction']];
+        })->toArray();
+    }
+
+    /**
      * Get the filter array for the query.
      *
-     * @param  Builder  $builder
+     * @param  Builder $builder
+     *
      * @return array
      */
     protected function filters(Builder $builder)
     {
-        return collect($builder->wheres)->map(function ($value, $key) {
+        return collect($builder->wheres)->map(function($value, $key) {
             if (is_array($value)) {
                 return ['terms' => [$key => $value]];
             }
@@ -201,66 +232,50 @@ class ElasticsearchEngine extends Engine
     }
 
     /**
-     * Pluck and return the primary keys of the given results.
-     *
-     * @param  mixed  $results
-     * @return \Illuminate\Support\Collection
-     */
-    public function mapIds($results)
-    {
-        return collect($results['hits']['hits'])->pluck('_id')->values();
-    }
-
-    /**
-     * Map the given results to instances of the given model.
-     *
-     * @param  mixed  $results
-     * @param  \Illuminate\Database\Eloquent\Model  $model
-     * @return Collection
-     */
-    public function map($results, $model)
-    {
-        if ($results['hits']['total'] === 0) {
-            return Collection::make();
-        }
-
-        $keys = collect($results['hits']['hits'])
-                        ->pluck('_id')->values()->all();
-
-        $models = $model->whereIn(
-            $model->getKeyName(), $keys
-        )->get()->keyBy($model->getKeyName());
-
-        return collect($results['hits']['hits'])->map(function ($hit) use ($model, $models) {
-            return isset($models[$hit['_id']]) ? $models[$hit['_id']] : null;
-        })->filter()->values();
-    }
-
-    /**
-     * Get the total count from a raw result returned by the engine.
-     *
-     * @param  mixed  $results
-     * @return int
-     */
-    public function getTotalCount($results)
-    {
-        return $results['hits']['total'];
-    }
-
-    /**
-     * Generates the sort if theres any.
+     * Perform the given search on the engine.
      *
      * @param  Builder $builder
-     * @return array|null
+     *
+     * @return mixed
      */
-    protected function sort($builder)
+    public function search(Builder $builder)
     {
-        if (count($builder->orders) == 0) {
-            return null;
+        return $this->performSearch($builder, array_filter([
+            'numericFilters' => $this->filters($builder),
+            'size'           => $builder->limit,
+        ]));
+    }
+
+    /**
+     * Update the given model in the index.
+     *
+     * @param  Collection $models
+     *
+     * @return void
+     */
+    public function update($models)
+    {
+        if ($models->isEmpty()) {
+            return;
         }
 
-        return collect($builder->orders)->map(function($order) {
-            return [$order['column'] => $order['direction']];
-        })->toArray();
+        $params['body'] = [];
+        $params['type'] = $models->first()->searchableAs();
+
+        $models->each(function($model) use (&$params) {
+            $params['body'][] = [
+                'update' => [
+                    '_id'    => $model->getKey(),
+                    '_index' => $this->index,
+                    //                    '_type' => $model->searchableAs(),
+                ],
+            ];
+            $params['body'][] = [
+                'doc'           => $model->toSearchableArray(),
+                'doc_as_upsert' => TRUE,
+            ];
+        });
+
+        $this->elastic->bulk($params);
     }
 }

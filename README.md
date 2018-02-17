@@ -31,7 +31,7 @@ If you use laravel <5.5, you must add the Scout service provider and the Elastic
 ```
 
 ### Setting up Elasticsearch configuration
-You must have a Elasticsearch server up and running with the index you want to use created
+You must have a Elasticsearch server up and running. The package automatically create the index if it not exist
 
 If you need help with this please refer to the [Elasticsearch documentation](https://www.elastic.co/guide/en/elasticsearch/reference/current/index.html)
 
