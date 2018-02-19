@@ -48,6 +48,7 @@ After you've published the Laravel Scout package configuration:
         'hosts' => [
             env('ELASTICSEARCH_HOST', 'http://localhost'),
         ],
+        'max_result_window' => '200000'
     ],
 ...
 ```

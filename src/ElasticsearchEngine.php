@@ -31,14 +31,30 @@ class ElasticsearchEngine extends Engine
      *
      * @param $index
      */
-    public function __construct(Elastic $elastic, $index)
+    public function __construct(Elastic $elastic, $index, int $max_result_window)
     {
         $this->elastic = $elastic;
         $this->index   = $index;
 
         $indexParams['index'] = $this->index;
+
+        $params = [
+            'index' => $this->index,
+            'body'  => [
+                'settings' => [
+                    'max_result_window' => $max_result_window,
+                ],
+            ],
+        ];
+
         if (!$this->elastic->indices()->exists($indexParams)) {
-            $response = $this->elastic->indices()->create($indexParams);
+            $this->elastic->indices()->create($params);
+        }
+
+        $response = $this->elastic->indices()->getSettings($indexParams);
+
+        if (!isset($response[$this->index]['settings']['index']['max_result_window']) || $response[$this->index]['settings']['index']['max_result_window'] < $max_result_window) {
+            $this->elastic->indices()->putSettings($params);
         }
 
     }
@@ -224,7 +240,7 @@ class ElasticsearchEngine extends Engine
     {
         return collect($builder->wheres)->map(function($value, $key) {
             if (is_array($value)) {
-                return ['terms' => [$key => $value]];
+                return ['match' => [$key => implode(' ', $value)]];
             }
 
             return ['match_phrase' => [$key => $value]];

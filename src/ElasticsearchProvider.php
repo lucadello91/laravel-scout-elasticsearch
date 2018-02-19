@@ -2,12 +2,13 @@
 
 namespace ScoutEngines\Elasticsearch;
 
-use Laravel\Scout\EngineManager;
-use Illuminate\Support\ServiceProvider;
 use Elasticsearch\ClientBuilder as ElasticBuilder;
+use Illuminate\Support\ServiceProvider;
+use Laravel\Scout\EngineManager;
 
 class ElasticsearchProvider extends ServiceProvider
 {
+
     /**
      * Bootstrap the application services.
      */
@@ -17,7 +18,8 @@ class ElasticsearchProvider extends ServiceProvider
             return new ElasticsearchEngine(ElasticBuilder::create()
                 ->setHosts(config('scout.elasticsearch.hosts'))
                 ->build(),
-                config('scout.elasticsearch.index')
+                config('scout.elasticsearch.index'),
+                config('scout.elasticsearch.max_result_window', 200000)
             );
         });
     }
