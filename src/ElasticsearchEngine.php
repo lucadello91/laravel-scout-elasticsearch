@@ -8,7 +8,6 @@ use Laravel\Scout\Builder;
 use Laravel\Scout\Engines\Engine;
 use ScoutEngines\Elasticsearch\Builders\SearchBuilder;
 use ScoutEngines\Elasticsearch\Facades\ElasticsearchClient;
-use ScoutEngines\Elasticsearch\Indexers\SingleIndexer;
 use ScoutEngines\Elasticsearch\Payloads\TypePayload;
 use stdClass;
 
@@ -30,8 +29,10 @@ class ElasticsearchEngine extends Engine {
      * @param $config
      */
     public function __construct($config) {
-        $this->index   = config('scout.prefix') . array_get($config, 'index', 'laravel');
-        $this->indexer = new SingleIndexer($this->index);
+        $this->index  = config('scout.prefix') . array_get($config, 'index', 'laravel');
+        $indexerClass = ucfirst(array_get($config, 'indexer', 'single')) . "Indexer";
+
+        $this->indexer = new $indexerClass($this->index);
 
         try {
             $max_result_window = (int)array_get($config, 'max_result_window', 200000);

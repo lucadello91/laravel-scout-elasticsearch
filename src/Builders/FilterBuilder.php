@@ -188,6 +188,26 @@ class FilterBuilder extends Builder {
     }
 
     /**
+     * @see https://www.elastic.co/guide/en/elasticsearch/reference/current/query-dsl-wildcard-query.html Wildcard query
+     *
+     * @param string $field
+     * @param string $value
+     *
+     * @return $this
+     */
+    public function whereWildcard($field, $value) {
+        $this->wheres['must'][] = [
+            'wildcard' => [
+                $field => [
+                    'value' => $value
+                ],
+            ],
+        ];
+
+        return $this;
+    }
+
+    /**
      * @param mixed $value
      * @param callable $callback
      * @param callable|null $default
