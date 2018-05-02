@@ -30,7 +30,7 @@ class ElasticsearchEngine extends Engine {
      */
     public function __construct($config) {
         $this->index  = config('scout.prefix') . array_get($config, 'index', 'laravel');
-        $indexerClass = ucfirst(array_get($config, 'indexer', 'single')) . "Indexer";
+        $indexerClass = '\\ScoutEngines\\Elasticsearch\\Indexers\\'.ucfirst(array_get($config, 'indexer', 'single')) . "Indexer";
 
         $this->indexer = new $indexerClass($this->index);
 
