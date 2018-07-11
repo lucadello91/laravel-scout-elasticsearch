@@ -1,6 +1,8 @@
 # Laravel Scout Elasticsearch Driver
 
 [![Software License](https://img.shields.io/badge/license-MIT-brightgreen.svg?style=flat-square)](LICENSE)
+[![Packagist Version](https://img.shields.io/packagist/v/lucadello91/laravel-scout-elasticsearch.svg?style=flat-square)](https://packagist.org/packages/lucadello91/laravel-scout-elasticsearch)
+[![Total Downloads](https://img.shields.io/packagist/dt/lucadello91/laravel-scout-elasticsearch.svg?style=flat-square)](https://packagist.org/packages/lucadello91/laravel-scout-elasticsearch)
 
 This package makes is the [Elasticsearch 6](https://www.elastic.co/products/elasticsearch) driver for Laravel Scout 4.
 
